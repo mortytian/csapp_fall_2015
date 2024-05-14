@@ -149,7 +149,7 @@ int bitXor(int x, int y) {
  *   Max ops: 4
  *   Rating: 1
  */
-int tmin(void) { return 2; }
+int tmin(void) { return 1 << 31; }
 // 2
 /*
  * isTmax - returns 1 if x is the maximum, two's complement number,
@@ -158,7 +158,7 @@ int tmin(void) { return 2; }
  *   Max ops: 10
  *   Rating: 2
  */
-int isTmax(int x) { return 2; }
+int isTmax(int x) { return x & 0x7fff; }
 /*
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
  *   Examples allOddBits(0xFFFFFFFD) = 0, allOddBits(0xAAAAAAAA) = 1
@@ -184,7 +184,12 @@ int negate(int x) { return 2; }
  *   Max ops: 15
  *   Rating: 3
  */
-int isAsciiDigit(int x) { return 2; }
+int isAsciiDigit(int x) {
+  int lower_bound = 0x30;
+  int upper_bound = 0x39;
+
+  return 2;
+}
 /*
  * conditional - same as x ? y : z
  *   Example: conditional(2,4,5) = 4
