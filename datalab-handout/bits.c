@@ -158,7 +158,7 @@ int tmin(void) { return 1 << 31; }
  *   Max ops: 10
  *   Rating: 2
  */
-int isTmax(int x) { return x & 0x7fff; }
+int isTmax(int x) { return !(x ^ 0x7fffffff); }
 /*
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
  *   Examples allOddBits(0xFFFFFFFD) = 0, allOddBits(0xAAAAAAAA) = 1
@@ -166,7 +166,11 @@ int isTmax(int x) { return x & 0x7fff; }
  *   Max ops: 12
  *   Rating: 2
  */
-int allOddBits(int x) { return 2; }
+int allOddBits(int x) {
+  int mask = 0xAAAAAAAA;
+  int mask_in_x = x & mask;
+  return !(mask_in_x ^ mask);
+}
 /*
  * negate - return -x
  *   Example: negate(1) = -1.
@@ -174,7 +178,7 @@ int allOddBits(int x) { return 2; }
  *   Max ops: 5
  *   Rating: 2
  */
-int negate(int x) { return 2; }
+int negate(int x) { return ~x + 1; }
 // 3
 /*
  * isAsciiDigit - return 1 if 0x30 <= x <= 0x39 (ASCII codes for characters '0'
@@ -185,10 +189,13 @@ int negate(int x) { return 2; }
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
-  int lower_bound = 0x30;
-  int upper_bound = 0x39;
-
-  return 2;
+  int prefix_mask = 0x3;
+  int prefix_flag = (x >> 4) ^ prefix_mask; // need prefix_flag == 0
+  int suffix_mask1 = 0xa;
+  int suffix_mask2 = 0xc;
+  int suffix_flag = !(x & suffix_mask1 ^ suffix_mask1) |
+                    !(x & suffix_mask2 ^ suffix_mask2); // need suffix_flag == 0
+  return !(prefix_flag | suffix_flag);
 }
 /*
  * conditional - same as x ? y : z
@@ -197,7 +204,13 @@ int isAsciiDigit(int x) {
  *   Max ops: 16
  *   Rating: 3
  */
-int conditional(int x, int y, int z) { return 2; }
+int conditional(int x, int y, int z) {
+  int x_all_zero = !(x ^ 0);
+  int mask = (x_all_zero << 31) >> 31;
+  int res1 = (mask & z);
+  int res2 = (~mask & y);
+  return (res1 ^ res2);
+}
 /*
  * isLessOrEqual - if x <= y  then return 1, else return 0
  *   Example: isLessOrEqual(4,5) = 1.
@@ -205,7 +218,31 @@ int conditional(int x, int y, int z) { return 2; }
  *   Max ops: 24
  *   Rating: 3
  */
-int isLessOrEqual(int x, int y) { return 2; }
+int isLessOrEqual(int x, int y) {
+  // sign bit, if x < 0, x_sign = 1, else x_sign = 0
+  int x_sign = (x >> 31) & 1;
+  int y_sign = (y >> 31) & 1;
+  // if sign same, compare x and y
+  int sign_same = !(x_sign ^ y_sign); // if sign same, sign_same = 1
+
+  /**
+   * general we use  x+(~y+1) to present x-y, however, in that case,
+   * when x = y, x_less_y would be 0, makes judgement complicated;
+   * so, here we use x+(~y), which equals x - y -1
+   * when y > x, x_less_y = 1, when y = x, x_less_y = 1, when y < x,
+   * x_less_y !=1 this makes judgement simple
+   */
+  int x_less_y = (x + (~y)) >> 31; // if x <= y, x_less_y = 1
+
+  int flag1 = sign_same & x_less_y;
+
+  // if sign not same, if x < 0, then x < y, else x > y
+  int flag2 = (!sign_same) &
+              (x_sign & (!y_sign)); // if sign not same and x < 0, flag2 = 1
+
+  return flag1 | flag2;
+  //   return ret;
+}
 // 4
 /*
  * logicalNeg - implement the ! operator, using all of
