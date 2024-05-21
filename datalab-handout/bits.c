@@ -252,7 +252,13 @@ int isLessOrEqual(int x, int y) {
  *   Max ops: 12
  *   Rating: 4
  */
-int logicalNeg(int x) { return 2; }
+int logicalNeg(int x) {
+  // if x != 0, then ~(-x) and ~x are start with 1
+  int neg = ~(~x + 1);
+  int flag = neg & (~x);
+  return flag >> 31 & 0x01;
+}
+
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
  *  Examples: howManyBits(12) = 5
@@ -265,7 +271,26 @@ int logicalNeg(int x) { return 2; }
  *  Max ops: 90
  *  Rating: 4
  */
-int howManyBits(int x) { return 0; }
+int howManyBits(int x) {
+  int sign, bit16, bit8, bit4, bit2, bit1;
+  sign = x >> 31;
+  // -5 1011
+
+  x = (sign & ~x) | (~sign & x);
+
+  bit16 = !!(x >> 16) << 4;
+  x = x >> bit16;
+  bit8 = !!(x >> 8) << 3;
+  x = x >> bit8;
+  bit4 = !!(x >> 4) << 2;
+  x = x >> bit4;
+  bit2 = !!(x >> 2) << 1;
+  x = x >> bit2;
+  bit1 = !!(x >> 1);
+  x = x >> bit1;
+
+  return bit16 + bit8 + bit4 + bit2 + bit1 + x + 1;
+}
 // float
 /*
  * float_twice - Return bit-level equivalent of expression 2*f for
