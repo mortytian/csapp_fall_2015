@@ -303,7 +303,31 @@ int howManyBits(int x) {
  *   Max ops: 30
  *   Rating: 4
  */
-unsigned float_twice(unsigned uf) { return 2; }
+unsigned float_twice(unsigned uf) {
+  unsigned sign = uf & 0x80000000; // 1000 ...
+  unsigned exp = uf & 0x7f800000;  // 0111 1111 1000 0...
+  unsigned frac = uf & 0x007fffff; // 0000 0000 0111 1111...
+
+  // if exp = 0, uf is denormalized
+  if (exp == 0) {
+    return frac << 1 | sign;
+  }
+
+  // if exp = 0x7f800000, uf is NaN or infinity, return uf
+  if (exp == 0x7f800000) {
+    return uf;
+  }
+
+  // twice
+  exp = ((exp >> 23) + 1) << 23;
+
+  // if exp = 0x7f800000 res is infinity
+  if (exp == 0x7f800000) {
+    return exp | sign;
+  }
+
+  return sign | exp | frac;
+}
 /*
  * float_i2f - Return bit-level equivalent of expression (float) x
  *   Result is returned as unsigned int, but
@@ -313,7 +337,71 @@ unsigned float_twice(unsigned uf) { return 2; }
  *   Max ops: 30
  *   Rating: 4
  */
-unsigned float_i2f(int x) { return 2; }
+unsigned float_i2f(int x) {
+  /**
+   * 1. decide sign bit
+   * 2. decide exp
+   * 3. decide frac
+   */
+  if (x == 0) {
+    return 0;
+  }
+
+  int sign, exp, frac;
+  int bias = 127;
+
+  // decide sign bit
+  if (x < 0) {
+    sign = 0x80000000;
+    frac = (~x) + 1;
+  } else {
+    sign = 0x00000000;
+    frac = x;
+  }
+
+  // decide exp
+  int digit = 0;
+  for (unsigned i = frac; i > 0; i = i >> 1) {
+    digit++;
+  }
+  digit -= 1;
+  exp = digit + bias;
+
+  // decide frac
+  frac = frac & (~(1 << digit)); // ignore first bit which is 1
+
+  if (digit <= 23) {
+    frac = frac << (23 - digit);
+  } else {
+    int bit_count = 0;
+    while (digit > 24) {
+      if (frac & 0x01) {
+        bit_count++;
+      }
+      frac = frac >> 1;
+      digit--;
+    }
+
+    unsigned next_bit_value = frac & 0x01;
+    frac = frac >> 1;
+    if (next_bit_value) {
+      if (bit_count > 0) {
+        // bigger than median value, round to upper
+        frac += 1;
+      } else if (frac & 0x01) {
+        // equal to median value and LSB is odd, round to even
+        frac += 1;
+      }
+    }
+
+    if (frac >> 23) {
+      exp += 1;
+      frac = frac & 0x7fffff;
+    }
+  }
+  return sign | (exp << 23) | frac;
+}
+
 /*
  * float_f2i - Return bit-level equivalent of expression (int) f
  *   for floating point argument f.
@@ -326,4 +414,47 @@ unsigned float_i2f(int x) { return 2; }
  *   Max ops: 30
  *   Rating: 4
  */
-int float_f2i(unsigned uf) { return 2; }
+int float_f2i(unsigned uf) {
+  int sign, exp, frac;
+  sign = uf & 0x80000000;
+  exp = (uf & 0x7f800000) >> 23;
+  frac = uf & 0x007fffff;
+
+  int E = exp - 127;
+
+  if (exp == 0) {
+    return 0;
+  }
+
+  if (exp == 255) {
+    if (frac & (~0x0)) {
+      return 0;
+    }
+    if (sign) {
+      return 0x80000000;
+    } else {
+      return 0x7fffffff;
+    }
+  }
+
+  if (E > 32) {
+    if (sign) {
+      return 0x80000000;
+    } else {
+      return 0x7fffffff;
+    }
+  }
+
+  if (E < 0) {
+    return 0;
+  }
+  unsigned M = frac | (1 << 23); // 1 + frac
+
+  int V = (E > 23 ? M << (E - 23) : M >> (23 - E));
+
+  if (sign) {
+    V *= -1;
+  }
+
+  return V;
+}
